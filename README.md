@@ -12,7 +12,11 @@
 ## 📸 Preview
 
 <!-- Replace the path below with your actual screenshot once uploaded to your repo -->
-![Spell Checker Demo Screenshot](./screenshots/preview.png)
+<div align="center">
+
+| | |
+|:---:|:---:|
+| ![Plot 1](screenshorts/preview.png) | ![Plot 2](screenshorts/preview1.png) |
 
 > *Live demo showing DFA and NFA state traces for the word "colour"*
 
