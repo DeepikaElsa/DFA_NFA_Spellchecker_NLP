@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spell Checker — DFA & NFA</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f0e8;
+  --ink: #1a1410;
+  --paper: #faf7f2;
+  --ruled: #e8e0d0;
+  --dfa: #c0392b;
+  --nfa: #16537e;
+  --gold: #b5860d;
+  --green: #1e6b3c;
+  --muted: #7a6e5f;
+  --dfa-light: rgba(192,57,43,0.08);
+  --nfa-light: rgba(22,83,126,0.08);
+  --shadow: 0 4px 20px rgba(26,20,16,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Crimson Pro', serif;
+  min-height:100vh;
+  background-image:
+    repeating-linear-gradient(transparent, transparent 27px, var(--ruled) 27px, var(--ruled) 28px);
+  background-attachment: fixed;
+}
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background: linear-gradient(135deg, rgba(181,134,13,0.04) 0%, transparent 50%, rgba(22,83,126,0.04) 100%);
+  pointer-events:none;
+}
+
+.wrap { max-width: 1020px; margin: 0 auto; padding: 48px 24px; position:relative; }
+
+/* HEADER */
+header {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  padding: 36px 40px;
+  margin-bottom: 36px;
+  box-shadow: 6px 6px 0 var(--ink);
+  position:relative;
+  overflow:hidden;
+}
+header::before {
+  content:'SPELL CHECK';
+  position:absolute;
+  top:-10px; right:20px;
+  font-family:'Syne',sans-serif;
+  font-size:6rem;
+  font-weight:800;
+  color:rgba(26,20,16,0.04);
+  letter-spacing:-4px;
+  pointer-events:none;
+}
+.tag-row { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+.tag {
+  font-family:'Fira Code',monospace;
+  font-size:0.68rem;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  padding:3px 12px;
+  border:1px solid currentColor;
+  border-radius:1px;
+}
+.tag-dfa { color:var(--dfa); }
+.tag-nfa { color:var(--nfa); }
+.tag-nlp { color:var(--gold); }
+header h1 {
+  font-family:'Syne',sans-serif;
+  font-size: clamp(1.8rem,4vw,3rem);
+  font-weight:800;
+  line-height:1.1;
+  margin-bottom:10px;
+  letter-spacing:-1px;
+}
+header p {
+  font-size:1.1rem;
+  font-weight:300;
+  line-height:1.7;
+  color:var(--muted);
+  max-width:600px;
+}
+.em { color:var(--dfa); font-style:italic; }
+.em2 { color:var(--nfa); font-style:italic; }
+
+/* SECTION */
+.sec {
+  margin-bottom: 36px;
+}
+.sec-head {
+  font-family:'Syne',sans-serif;
+  font-size:0.75rem;
+  letter-spacing:4px;
+  text-transform:uppercase;
+  color:var(--muted);
+  border-bottom:2px solid var(--ink);
+  padding-bottom:8px;
+  margin-bottom:20px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.sec-num { color:var(--gold); font-size:1rem; font-weight:700; }
+
+/* INPUT */
+.input-card {
+  background:var(--paper);
+  border:2px solid var(--ink);
+  box-shadow:4px 4px 0 var(--ink);
+  border-radius:2px;
+  padding:24px 28px;
+  margin-bottom:28px;
+}
+.input-row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px; }
+.field-wrap { flex:1; min-width:200px; }
+.field-label { font-family:'Syne',sans-serif; font-size:0.7rem; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:6px; display:block; }
+input[type=text] {
+  width:100%;
+  background:var(--bg);
+  border:2px solid var(--ink);
+  border-radius:1px;
+  padding:10px 14px;
+  font-family:'Fira Code',monospace;
+  font-size:1rem;
+  color:var(--ink);
+  outline:none;
+  transition:border-color 0.2s, box-shadow 0.2s;
+}
+input[type=text]:focus { border-color:var(--dfa); box-shadow:3px 3px 0 var(--dfa); }
+.btn {
+  padding:11px 24px;
+  border:2px solid var(--ink);
+  border-radius:1px;
+  font-family:'Syne',sans-serif;
+  font-size:0.8rem;
+  font-weight:700;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:all 0.15s;
+  white-space:nowrap;
+}
+.btn-primary { background:var(--ink); color:var(--bg); }
+.btn-primary:hover { background:var(--dfa); border-color:var(--dfa); }
+.preset-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.preset-lbl { font-family:'Syne',sans-serif; font-size:0.65rem; letter-spacing:2px; text-transform:uppercase; color:var(--muted); }
+.preset {
+  font-family:'Fira Code',monospace;
+  font-size:0.8rem;
+  padding:4px 14px;
+  background:transparent;
+  border:1px solid var(--muted);
+  border-radius:1px;
+  cursor:pointer;
+  color:var(--muted);
+  transition:all 0.15s;
+}
+.preset:hover { border-color:var(--ink); color:var(--ink); background:rgba(26,20,16,0.04); }
+
+/* RESULT CARDS */
+.result-row { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:28px; }
+@media(max-width:640px){.result-row{grid-template-columns:1fr;}}
+.res-card {
+  background:var(--paper);
+  border:2px solid var(--ink);
+  border-radius:2px;
+  padding:22px;
+  position:relative;
+  transition:box-shadow 0.2s;
+}
+.res-card.dfa-card { border-top:5px solid var(--dfa); }
+.res-card.nfa-card { border-top:5px solid var(--nfa); }
+.res-card.has-result { box-shadow:4px 4px 0 var(--ink); }
+.res-label { font-family:'Syne',sans-serif; font-size:0.7rem; letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; }
+.res-label.d { color:var(--dfa); }
+.res-label.n { color:var(--nfa); }
+.verdict { font-family:'Syne',sans-serif; font-size:1.4rem; font-weight:800; margin-bottom:6px; }
+.verdict.accept { color:var(--green); }
+.verdict.reject { color:var(--dfa); }
+.verdict.idle { color:var(--muted); font-weight:400; font-size:1rem; font-family:'Crimson Pro',serif; font-style:italic; }
+.res-detail { font-size:0.95rem; color:var(--muted); margin-bottom:14px; line-height:1.5; }
+.method-badge {
+  display:inline-block;
+  font-family:'Fira Code',monospace;
+  font-size:0.68rem;
+  padding:2px 10px;
+  border:1px solid currentColor;
+  border-radius:1px;
+  margin-right:4px;
+  margin-bottom:4px;
+}
+.mb-dfa { color:var(--dfa); }
+.mb-nfa { color:var(--nfa); }
+.mb-ok { color:var(--green); }
+
+/* TRANSITION TABLE */
+.tbl-outer {
+  background:var(--paper);
+  border:2px solid var(--ink);
+  box-shadow:4px 4px 0 var(--ink);
+  border-radius:2px;
+  overflow:hidden;
+  margin-bottom:28px;
+}
+.tbl-header {
+  background:var(--ink);
+  color:var(--bg);
+  padding:12px 20px;
+  font-family:'Syne',sans-serif;
+  font-size:0.72rem;
+  letter-spacing:3px;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.tbl-header .sub { font-size:0.6rem; color:rgba(245,240,232,0.5); font-style:normal; }
+.tbl-scroll { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+th {
+  padding:10px 14px;
+  background:rgba(26,20,16,0.05);
+  font-family:'Syne',sans-serif;
+  font-size:0.65rem;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  text-align:left;
+  border-bottom:1px solid var(--ruled);
+  white-space:nowrap;
+}
+th.dh { color:var(--dfa); }
+th.nh { color:var(--nfa); }
+th.eh { color:var(--gold); }
+td {
+  padding:9px 14px;
+  border-bottom:1px solid var(--ruled);
+  font-family:'Fira Code',monospace;
+  font-size:0.78rem;
+  vertical-align:middle;
+}
+tr:last-child td { border-bottom:none; }
+tr.highlight td { background:rgba(181,134,13,0.08); }
+td.state-col { color:var(--muted); font-weight:500; white-space:nowrap; }
+td.final-col { color:var(--green); font-weight:700; }
+td.accept-col { color:var(--green); }
+td.reject-col { color:rgba(26,20,16,0.25); }
+.cell-set { display:flex; flex-wrap:wrap; gap:3px; }
+.cs {
+  padding:1px 7px;
+  border-radius:1px;
+  font-size:0.7rem;
+  border:1px solid currentColor;
+}
+.cs-d { color:var(--dfa); background:var(--dfa-light); }
+.cs-n { color:var(--nfa); background:var(--nfa-light); }
+.cs-g { color:var(--green); background:rgba(30,107,60,0.08); }
+.cs-e { color:var(--gold); background:rgba(181,134,13,0.08); }
+.cs-x { color:var(--muted); }
+tr.active-row td { background:rgba(192,57,43,0.06); }
+
+/* NFA PATH TABLE */
+.nfa-paths-box {
+  background:var(--paper);
+  border:2px solid var(--nfa);
+  border-radius:2px;
+  padding:20px 24px;
+  margin-bottom:28px;
+}
+.nfa-paths-title { font-family:'Syne',sans-serif; font-size:0.7rem; letter-spacing:3px; text-transform:uppercase; color:var(--nfa); margin-bottom:14px; }
+.path-row {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin-bottom:8px;
+  font-family:'Fira Code',monospace;
+  font-size:0.8rem;
+  flex-wrap:wrap;
+  animation: slideIn 0.3s ease both;
+}
+@keyframes slideIn { from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);} }
+.path-state { padding:2px 9px; border:1px solid var(--nfa); border-radius:1px; color:var(--nfa); background:var(--nfa-light); font-size:0.72rem; }
+.path-state.ps-eps { border-color:var(--gold); color:var(--gold); background:rgba(181,134,13,0.07); }
+.path-state.ps-ok { border-color:var(--green); color:var(--green); background:rgba(30,107,60,0.07); }
+.path-arr { color:var(--muted); font-size:0.7rem; }
+.path-sym { color:var(--gold); font-weight:700; }
+.path-dead { color:var(--dfa); font-style:italic; font-size:0.75rem; }
+.eps-note { font-size:0.7rem; color:var(--gold); font-family:'Crimson Pro',serif; font-style:italic; }
+
+/* SVG DIAGRAM */
+.diag-row { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:28px; }
+@media(max-width:700px){.diag-row{grid-template-columns:1fr;}}
+.diag-card {
+  background:var(--paper);
+  border:2px solid var(--ink);
+  border-radius:2px;
+  padding:20px;
+}
+.diag-card.dfa-card { border-top:5px solid var(--dfa); box-shadow:4px 4px 0 var(--dfa); }
+.diag-card.nfa-card { border-top:5px solid var(--nfa); box-shadow:4px 4px 0 var(--nfa); }
+.diag-title { font-family:'Syne',sans-serif; font-size:0.68rem; letter-spacing:3px; text-transform:uppercase; margin-bottom:14px; }
+.diag-title.d { color:var(--dfa); }
+.diag-title.n { color:var(--nfa); }
+svg.diag { width:100%; overflow:visible; }
+
+/* INSIGHT BOX */
+.insight {
+  background:var(--paper);
+  border:2px solid var(--gold);
+  box-shadow:4px 4px 0 var(--gold);
+  border-radius:2px;
+  padding:24px 28px;
+  margin-bottom:28px;
+}
+.insight h3 { font-family:'Syne',sans-serif; font-size:0.95rem; font-weight:800; color:var(--gold); margin-bottom:12px; letter-spacing:1px; }
+.insight p { font-size:1rem; line-height:1.75; color:var(--muted); margin-bottom:10px; }
+.insight p:last-child { margin-bottom:0; }
+.ins-b { color:var(--ink); font-weight:400; }
+
+footer {
+  text-align:center;
+  margin-top:36px;
+  font-family:'Fira Code',monospace;
+  font-size:0.65rem;
+  letter-spacing:4px;
+  color:var(--muted);
+  text-transform:uppercase;
+  padding:20px 0;
+  border-top:1px solid var(--ruled);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HEADER -->
+<header>
+  <div class="tag-row">
+    <span class="tag tag-nlp">NLP Application</span>
+    <span class="tag tag-dfa">DFA</span>
+    <span class="tag tag-nfa">NFA</span>
+    <span class="tag tag-nlp">Edit Distance · Levenshtein</span>
+  </div>
+  <h1>Spell Checker<br><span class="em">color</span> ↔ <span class="em2">colour</span></h1>
+  <p>How automata recognize spelling variants, handle edit-distance errors, and suggest corrections — the engine behind every spell-checker in NLP pipelines.</p>
+</header>
+
+<!-- INPUT -->
+<div class="sec">
+  <div class="sec-head"><span class="sec-num">01</span> Try the Spell Checker</div>
+  <div class="input-card">
+    <div class="input-row">
+      <div class="field-wrap">
+        <span class="field-label">Enter a word to check</span>
+        <input type="text" id="wordIn" placeholder="color, colour, collor, calor..." value="colour" maxlength="20"/>
+      </div>
+      <button class="btn btn-primary" onclick="check()">▶ Check Spelling</button>
+    </div>
+    <div class="preset-row">
+      <span class="preset-lbl">Presets:</span>
+      <button class="preset" onclick="setW('color')">color</button>
+      <button class="preset" onclick="setW('colour')">colour</button>
+      <button class="preset" onclick="setW('collor')">collor ✗</button>
+      <button class="preset" onclick="setW('coler')">coler ✗</button>
+      <button class="preset" onclick="setW('calor')">calor ✗</button>
+      <button class="preset" onclick="setW('colouur')">colouur ✗</button>
+      <button class="preset" onclick="setW('clour')">clour ✗</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div class="result-row">
+  <div class="res-card dfa-card" id="dfaCard">
+    <div class="res-label d">◆ DFA — Deterministic</div>
+    <div class="verdict idle" id="dfaVerdict">Awaiting input…</div>
+    <div class="res-detail" id="dfaDetail">The DFA for "color/colour" has one exact path per accepted string.</div>
+    <div id="dfaBadges"></div>
+  </div>
+  <div class="res-card nfa-card" id="nfaCard">
+    <div class="res-label n">◆ NFA — Non-Deterministic</div>
+    <div class="verdict idle" id="nfaVerdict">Awaiting input…</div>
+    <div class="res-detail" id="nfaDetail">The NFA uses ε-transitions to simultaneously try "color" and "colour" paths.</div>
+    <div id="nfaBadges"></div>
+  </div>
+</div>
+
+<!-- DIAGRAMS -->
+<div class="sec">
+  <div class="sec-head"><span class="sec-num">02</span> Automaton Diagrams</div>
+  <div class="diag-row">
+    <!-- DFA -->
+    <div class="diag-card dfa-card">
+      <div class="diag-title d">DFA — color | colour (two explicit paths)</div>
+      <svg class="diag" viewBox="0 0 440 260">
+        <defs>
+          <marker id="ad" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3z" fill="#c0392b"/>
+          </marker>
+        </defs>
+        <!-- Start -->
+        <line x1="4" y1="70" x2="30" y2="70" stroke="#c0392b" stroke-width="1.5" marker-end="url(#ad)"/>
+        <!-- States along top: q0 c o l q3 -->
+        <!-- q0 -->
+        <rect x="40" y="48" width="44" height="44" rx="2" fill="#faf7f2" stroke="#c0392b" stroke-width="2"/>
+        <text x="62" y="72" text-anchor="middle" fill="#c0392b" font-family="Fira Code" font-size="11" font-weight="500">q₀</text>
+        <!-- q0→q1: c -->
+        <line x1="84" y1="70" x2="114" y2="70" stroke="#c0392b" stroke-width="1.5" marker-end="url(#ad)"/>
+        <text x="99" y="60" fill="#b5860d" font-family="Fira Code" font-size="13" font-weight="700" text-anchor="middle">c</text>
+        <!-- q1 -->
+        <rect x="122" y="48" width="44" height="44" rx="2" fill="#faf7f2" stroke="#c0392b" stroke-width="1.5"/>
+        <text x="144" y="72" text-anchor="middle" fill="#c0392b" font-family="Fira Code" font-size="11">q₁</text>
+        <!-- q1→q2: o -->
+        <line x1="166" y1="70" x2="196" y2="70" stroke="#c0392b" stroke-width="1.5" marker-end="url(#ad)"/>
+        <text x="181" y="60" fill="#b5860d" font-family="Fira Code" font-size="13" font-weight="700" text-anchor="middle">o</text>
+        <!-- q2 -->
+        <rect x="204" y="48" width="44" height="44" rx="2" fill="#faf7f2" stroke="#c0392b" stroke-width="1.5"/>
+        <text x="226" y="72" text-anchor="middle" fill="#c0392b" font-family="Fira Code" font-size="11">q₂</text>
+        <!-- q2→q3: l -->
+        <line x1="248" y1="70" x2="278" y2="70" stroke="#c0392b" stroke-width="1.5" marker-end="url(#ad)"/>
+        <text x="263" y="60" fill="#b5860d" font-family="Fira Code" font-size="13" font-weight="700" text-anchor="middle">l</text>
+        <!-- q3 -->
+        <rect x="286" y="48" width="44" height="44" rx="2" fill="#faf7f2" stroke="#c0392b" stroke-width="1.5"/>
+        <text x="308" y="72" text-anchor="middle" fill="#c0392b" font-family="Fira Code" font-size="11">q₃</text>
+
+        <!-- BRANCH at q3: American path o→r, British path o→u→r -->
+        <!-- American: q3→qA(o)→qB(r) accept -->
+        <line x1="330" y1="60" x2="366" y2="38" stroke="#c0392b" stroke-width="1.5" marker-end="url(#ad)"/>
+        <text x="348" y="38" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700">o</text>
+        <rect x="370" y="20" width="40" height="36" rx="2" fill="#faf7f2" stroke="#c0392b" stroke-width="1.5"/>
+        <text x="390" y="42" text-anchor="middle" fill="#c0392b" font-family="Fira Code" font-size="10">qₐ</text>
+        <!-- qA→qB: r -->
+        <line x1="390" y1="56" x2="390" y2="84" stroke="#c0392b" stroke-width="1.5" marker-end="url(#ad)"/>
+        <text x="402" y="74" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700">r</text>
+        <!-- qB accept (color) -->
+        <rect x="370" y="92" width="40" height="36" rx="2" fill="rgba(30,107,60,0.08)" stroke="#1e6b3c" stroke-width="2"/>
+        <rect x="373" y="95" width="34" height="30" rx="1" fill="none" stroke="#1e6b3c" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="390" y="111" text-anchor="middle" fill="#1e6b3c" font-family="Fira Code" font-size="9">color✓</text>
+
+        <!-- British: q3→qU(o)→qV(u)→qW(r) accept -->
+        <line x1="330" y1="80" x2="366" y2="140" stroke="#c0392b" stroke-width="1.5" marker-end="url(#ad)"/>
+        <text x="340" y="120" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700">o</text>
+        <rect x="370" y="126" width="40" height="36" rx="2" fill="#faf7f2" stroke="#c0392b" stroke-width="1.5"/>
+        <text x="390" y="148" text-anchor="middle" fill="#c0392b" font-family="Fira Code" font-size="10">qᵤ</text>
+        <!-- qU→qV: u -->
+        <line x1="390" y1="162" x2="390" y2="192" stroke="#c0392b" stroke-width="1.5" marker-end="url(#ad)"/>
+        <text x="402" y="180" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700">u</text>
+        <rect x="370" y="198" width="40" height="36" rx="2" fill="#faf7f2" stroke="#c0392b" stroke-width="1.5"/>
+        <text x="390" y="220" text-anchor="middle" fill="#c0392b" font-family="Fira Code" font-size="10">qᵥ</text>
+        <!-- qV→accept: r -->
+        <path d="M370,216 Q340,240 310,240" stroke="#c0392b" stroke-width="1.5" fill="none" marker-end="url(#ad)"/>
+        <text x="340" y="256" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700" text-anchor="middle">r</text>
+        <!-- colour accept -->
+        <rect x="240" y="226" width="60" height="30" rx="2" fill="rgba(30,107,60,0.08)" stroke="#1e6b3c" stroke-width="2"/>
+        <rect x="243" y="229" width="54" height="24" rx="1" fill="none" stroke="#1e6b3c" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="270" y="244" text-anchor="middle" fill="#1e6b3c" font-family="Fira Code" font-size="9">colour✓</text>
+
+        <!-- Dead state label -->
+        <text x="40" y="190" fill="#c0392b" font-family="Fira Code" font-size="9" opacity="0.5">Any other char → DEAD</text>
+
+        <!-- annotation -->
+        <text x="40" y="130" fill="#7a6e5f" font-family="Crimson Pro" font-size="10" font-style="italic">Two SEPARATE explicit</text>
+        <text x="40" y="143" fill="#7a6e5f" font-family="Crimson Pro" font-size="10" font-style="italic">paths — no sharing</text>
+
+        <!-- Legend -->
+        <rect x="40" y="250" width="10" height="10" rx="1" fill="rgba(30,107,60,0.08)" stroke="#1e6b3c" stroke-width="1.5"/>
+        <text x="56" y="259" fill="#7a6e5f" font-family="Crimson Pro" font-size="9">Accept state (double border)</text>
+      </svg>
+    </div>
+
+    <!-- NFA -->
+    <div class="diag-card nfa-card">
+      <div class="diag-title n">NFA — color | colour (shared stem + ε-branch)</div>
+      <svg class="diag" viewBox="0 0 440 260">
+        <defs>
+          <marker id="an" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3z" fill="#16537e"/>
+          </marker>
+          <marker id="ae" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3z" fill="#b5860d"/>
+          </marker>
+        </defs>
+        <line x1="4" y1="70" x2="30" y2="70" stroke="#16537e" stroke-width="1.5" marker-end="url(#an)"/>
+
+        <!-- Shared stem: q0-c-q1-o-q2-l-q3 -->
+        <rect x="40" y="48" width="44" height="44" rx="2" fill="#faf7f2" stroke="#16537e" stroke-width="2"/>
+        <text x="62" y="70" text-anchor="middle" fill="#16537e" font-family="Fira Code" font-size="11" font-weight="500">q₀</text>
+        <text x="62" y="82" text-anchor="middle" fill="#7a6e5f" font-family="Crimson Pro" font-size="8" font-style="italic">start</text>
+
+        <line x1="84" y1="70" x2="114" y2="70" stroke="#16537e" stroke-width="1.5" marker-end="url(#an)"/>
+        <text x="99" y="60" fill="#b5860d" font-family="Fira Code" font-size="13" font-weight="700" text-anchor="middle">c</text>
+
+        <rect x="122" y="48" width="44" height="44" rx="2" fill="#faf7f2" stroke="#16537e" stroke-width="1.5"/>
+        <text x="144" y="72" text-anchor="middle" fill="#16537e" font-family="Fira Code" font-size="11">q₁</text>
+
+        <line x1="166" y1="70" x2="196" y2="70" stroke="#16537e" stroke-width="1.5" marker-end="url(#an)"/>
+        <text x="181" y="60" fill="#b5860d" font-family="Fira Code" font-size="13" font-weight="700" text-anchor="middle">o</text>
+
+        <rect x="204" y="48" width="44" height="44" rx="2" fill="#faf7f2" stroke="#16537e" stroke-width="1.5"/>
+        <text x="226" y="72" text-anchor="middle" fill="#16537e" font-family="Fira Code" font-size="11">q₂</text>
+
+        <line x1="248" y1="70" x2="278" y2="70" stroke="#16537e" stroke-width="1.5" marker-end="url(#an)"/>
+        <text x="263" y="60" fill="#b5860d" font-family="Fira Code" font-size="13" font-weight="700" text-anchor="middle">l</text>
+
+        <rect x="286" y="48" width="44" height="44" rx="2" fill="#faf7f2" stroke="#16537e" stroke-width="1.5"/>
+        <text x="308" y="72" text-anchor="middle" fill="#16537e" font-family="Fira Code" font-size="11">q₃</text>
+        <text x="308" y="84" text-anchor="middle" fill="#7a6e5f" font-family="Crimson Pro" font-size="8" font-style="italic">stem</text>
+
+        <!-- ε-transition from q3 to q3a (American path skips u) -->
+        <!-- American: q3 -o-> q4a -r-> ACCEPT_A -->
+        <!-- British:  q3 -o-> q4b -u-> q5b -r-> ACCEPT_B -->
+
+        <!-- q3 to branch: label "o" splits NFA -->
+        <text x="340" y="40" fill="#7a6e5f" font-family="Crimson Pro" font-size="9" font-style="italic" text-anchor="middle">NFA branches</text>
+        <text x="340" y="52" fill="#7a6e5f" font-family="Crimson Pro" font-size="9" font-style="italic" text-anchor="middle">on same 'o'!</text>
+
+        <!-- Both paths start from q3 with 'o' — NFA non-determinism -->
+        <!-- Upper branch (American color) -->
+        <path d="M330,60 Q370,38 380,30" stroke="#16537e" stroke-width="1.5" fill="none" marker-end="url(#an)"/>
+        <text x="368" y="30" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700">o</text>
+        <rect x="384" y="14" width="40" height="32" rx="2" fill="#faf7f2" stroke="#16537e" stroke-width="1.5"/>
+        <text x="404" y="34" text-anchor="middle" fill="#16537e" font-family="Fira Code" font-size="10">q₄ₐ</text>
+        <!-- q4a -r-> accept_A -->
+        <line x1="404" y1="46" x2="404" y2="72" stroke="#16537e" stroke-width="1.5" marker-end="url(#an)"/>
+        <text x="416" y="63" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700">r</text>
+        <rect x="384" y="78" width="40" height="32" rx="2" fill="rgba(30,107,60,0.1)" stroke="#1e6b3c" stroke-width="2"/>
+        <rect x="387" y="81" width="34" height="26" rx="1" fill="none" stroke="#1e6b3c" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="404" y="98" text-anchor="middle" fill="#1e6b3c" font-family="Fira Code" font-size="8">color✓</text>
+
+        <!-- Lower branch (British colour) — same 'o' from q3, NFA explores both -->
+        <path d="M330,80 Q370,120 380,128" stroke="#16537e" stroke-width="1.5" fill="none" marker-end="url(#an)"/>
+        <text x="368" y="118" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700">o</text>
+        <rect x="384" y="132" width="40" height="32" rx="2" fill="#faf7f2" stroke="#16537e" stroke-width="1.5"/>
+        <text x="404" y="152" text-anchor="middle" fill="#16537e" font-family="Fira Code" font-size="10">q₄ᵦ</text>
+        <!-- q4b -u-> q5b -->
+        <line x1="404" y1="164" x2="404" y2="190" stroke="#16537e" stroke-width="1.5" marker-end="url(#an)"/>
+        <text x="416" y="180" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700">u</text>
+        <rect x="384" y="196" width="40" height="32" rx="2" fill="#faf7f2" stroke="#16537e" stroke-width="1.5"/>
+        <text x="404" y="216" text-anchor="middle" fill="#16537e" font-family="Fira Code" font-size="10">q₅ᵦ</text>
+        <!-- q5b -r-> accept_B -->
+        <path d="M384,212 Q350,240 310,240" stroke="#16537e" stroke-width="1.5" fill="none" marker-end="url(#an)"/>
+        <text x="345" y="256" fill="#b5860d" font-family="Fira Code" font-size="11" font-weight="700" text-anchor="middle">r</text>
+        <rect x="240" y="228" width="60" height="30" rx="2" fill="rgba(30,107,60,0.1)" stroke="#1e6b3c" stroke-width="2"/>
+        <rect x="243" y="231" width="54" height="24" rx="1" fill="none" stroke="#1e6b3c" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="270" y="246" text-anchor="middle" fill="#1e6b3c" font-family="Fira Code" font-size="8">colour✓</text>
+
+        <!-- NFA highlight: shared stem annotation -->
+        <rect x="36" y="100" width="240" height="22" rx="1" fill="rgba(22,83,126,0.05)" stroke="#16537e" stroke-width="1" stroke-dasharray="4,2"/>
+        <text x="156" y="115" text-anchor="middle" fill="#16537e" font-family="Crimson Pro" font-size="10" font-style="italic">Shared stem "col" — processed ONCE</text>
+
+        <!-- ε note -->
+        <text x="40" y="148" fill="#b5860d" font-family="Crimson Pro" font-size="10" font-style="italic">NFA reads same 'o' from</text>
+        <text x="40" y="162" fill="#b5860d" font-family="Crimson Pro" font-size="10" font-style="italic">q₃ and spawns BOTH paths</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- TRANSITION TABLE -->
+<div class="sec">
+  <div class="sec-head"><span class="sec-num">03</span> Transition Table</div>
+  <p style="font-size:0.97rem;color:var(--muted);margin-bottom:16px;line-height:1.7;">The DFA has exactly <strong>one entry</strong> per (state, symbol) pair. The NFA's transition function returns a <em>set of states</em> — two states on symbol 'o' from q₃ is what makes it non-deterministic. The highlighted row shows where the paths diverge.</p>
+  <div class="tbl-outer">
+    <div class="tbl-header">
+      <span>Transition Function δ / Δ</span>
+      <span class="sub">∅ = dead / no transition · ✓ = accept state</span>
+    </div>
+    <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>State</th>
+          <th>Description</th>
+          <th class="dh">DFA: c</th>
+          <th class="dh">DFA: o</th>
+          <th class="dh">DFA: l</th>
+          <th class="dh">DFA: o</th>
+          <th class="dh">DFA: u</th>
+          <th class="dh">DFA: r</th>
+          <th class="nh">NFA: c</th>
+          <th class="nh">NFA: o</th>
+          <th class="nh">NFA: l</th>
+          <th class="nh">NFA: o (from q₃)</th>
+          <th class="nh">NFA: u</th>
+          <th class="nh">NFA: r</th>
+          <th>Accept?</th>
+        </tr>
+      </thead>
+      <tbody id="tblBody">
+        <tr>
+          <td class="state-col">q₀</td>
+          <td>Start state</td>
+          <td><span class="cs cs-d">q₁</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-n">q₁</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td class="reject-col">No</td>
+        </tr>
+        <tr>
+          <td class="state-col">q₁</td>
+          <td>Seen: "c"</td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-d">q₂</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-n">q₂</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td class="reject-col">No</td>
+        </tr>
+        <tr>
+          <td class="state-col">q₂</td>
+          <td>Seen: "co"</td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-d">q₃</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-n">q₃</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td class="reject-col">No</td>
+        </tr>
+        <tr class="highlight">
+          <td class="state-col" style="color:#b5860d;font-weight:700">q₃ ★</td>
+          <td style="color:#b5860d;font-style:italic">Seen: "col" — BRANCH POINT</td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-d">qₐ (Amer.)</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><div class="cell-set"><span class="cs cs-n">q₄ₐ</span><span class="cs cs-n">q₄ᵦ</span></div></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">—</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td class="reject-col">No</td>
+        </tr>
+        <tr>
+          <td class="state-col">qₐ (DFA)</td>
+          <td>DFA: seen "colo"</td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-d">qᵤ</span></td>
+          <td><span class="cs cs-g">ACCEPT</span></td>
+          <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+          <td class="reject-col">No</td>
+        </tr>
+        <tr>
+          <td class="state-col">q₄ₐ (NFA)</td>
+          <td>NFA: path "colo" →color</td>
+          <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-g">ACCEPT</span></td>
+          <td class="reject-col">No</td>
+        </tr>
+        <tr>
+          <td class="state-col">q₄ᵦ (NFA)</td>
+          <td>NFA: path "colo" →colour</td>
+          <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-n">q₅ᵦ</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td class="reject-col">No</td>
+        </tr>
+        <tr>
+          <td class="state-col">qᵤ (DFA)</td>
+          <td>DFA: seen "colou"</td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-g">ACCEPT</span></td>
+          <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+          <td class="reject-col">No</td>
+        </tr>
+        <tr>
+          <td class="state-col">q₅ᵦ (NFA)</td>
+          <td>NFA: seen "colou"</td>
+          <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs-x">∅</span></td>
+          <td><span class="cs cs-g">ACCEPT</span></td>
+          <td class="reject-col">No</td>
+        </tr>
+        <tr>
+          <td class="final-col">ACCEPT_color</td>
+          <td>color — US English ✓</td>
+          <td colspan="6" style="color:var(--green);font-family:Fira Code;font-size:0.75rem;">All transitions → ∅ (terminal accept state)</td>
+          <td colspan="6" style="color:var(--green);font-family:Fira Code;font-size:0.75rem;">All transitions → ∅</td>
+          <td class="accept-col">✓ color</td>
+        </tr>
+        <tr>
+          <td class="final-col">ACCEPT_colour</td>
+          <td>colour — UK English ✓</td>
+          <td colspan="6" style="color:var(--green);font-family:Fira Code;font-size:0.75rem;">All transitions → ∅ (terminal accept state)</td>
+          <td colspan="6" style="color:var(--green);font-family:Fira Code;font-size:0.75rem;">All transitions → ∅</td>
+          <td class="accept-col">✓ colour</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- NFA PARALLEL PATHS (live) -->
+<div class="sec" id="nfaPathSec" style="display:none;">
+  <div class="sec-head"><span class="sec-num">04</span> NFA Parallel Path Trace</div>
+  <div class="nfa-paths-box">
+    <div class="nfa-paths-title">◆ Active State Sets at Each Character Step</div>
+    <div id="nfaPathDisplay"></div>
+  </div>
+</div>
+
+<!-- EDIT DISTANCE TABLE -->
+<div class="sec">
+  <div class="sec-head"><span class="sec-num">05</span> Levenshtein Edit Distance Matrix</div>
+  <p style="font-size:0.97rem;color:var(--muted);margin-bottom:16px;line-height:1.7;">Real spell checkers extend automata with <strong>edit distance</strong>. The NFA-based Levenshtein automaton accepts all strings within distance <em>k</em> of the target. Below is the matrix for the input word vs. "color".</p>
+  <div class="tbl-outer">
+    <div class="tbl-header">
+      <span>Levenshtein Distance Matrix</span>
+      <span class="sub" id="editDistLabel">Input vs. "color"</span>
+    </div>
+    <div class="tbl-scroll">
+      <table id="editTable" style="min-width:300px;"></table>
+    </div>
+  </div>
+</div>
+
+<!-- INSIGHT -->
+<div class="sec">
+  <div class="sec-head"><span class="sec-num">06</span> What This Example Teaches</div>
+  <div class="insight">
+    <h3>THE CORE SPELL-CHECKER INSIGHT</h3>
+    <p><span class="ins-b">The DFA approach</span> requires two completely separate paths in the automaton — one for "color" and one for "colour." The shared prefix "col" is traversed by the same states, but the moment the automaton hits the 'o' in position 4, it must already be in a specific branch. The DFA is unambiguous but <em>structurally redundant</em> — it encodes both spellings fully and separately.</p>
+    <p><span class="ins-b">The NFA approach</span> shares the stem "col" (states q₀→q₁→q₂→q₃) and then at q₃, reading 'o', it <em>simultaneously</em> enters both q₄ₐ (American path, expecting 'r' next) and q₄ᵦ (British path, expecting 'u' then 'r'). Both paths are active at the same time. This is non-determinism: the machine doesn't choose — it explores all possibilities in parallel.</p>
+    <p><span class="ins-b">In production spell checkers</span> (like Hunspell, used in LibreOffice, Firefox, Chrome): the dictionary is compiled as a deterministic finite-state transducer (FST) — an NFA converted to a DFA via subset construction. The NFA is designed first for compactness, then converted for O(n) lookup speed. The Levenshtein NFA adds error-tolerance: it accepts any string within edit distance <em>k</em>, enabling suggestions for misspellings like "collor" → "color".</p>
+  </div>
+</div>
+
+<footer>Spell Checker · DFA & NFA · color ↔ colour · Levenshtein Edit Distance · NLP Formal Automata</footer>
+</div>
+
+<script>
+// ==============================
+// SPELL CHECKER LOGIC
+// ==============================
+const TARGETS = ['color', 'colour'];
+
+// DFA: accept only exact "color" or "colour"
+function dfaCheck(word) {
+  const w = word.toLowerCase();
+  if (w === 'color') return {accept:true, match:'color', path:['q₀','q₁','q₂','q₃','qₐ','ACCEPT_color']};
+  if (w === 'colour') return {accept:true, match:'colour', path:['q₀','q₁','q₂','q₃','qₐ','qᵤ','ACCEPT_colour']};
+  // Trace partial path
+  const seq = 'colour';
+  let path = ['q₀'];
+  const stateNames = ['q₀','q₁','q₂','q₃','qₐ','qᵤ','ACCEPT_colour'];
+  for (let i=0;i<w.length;i++) {
+    if (i < seq.length && w[i] === seq[i]) {
+      path.push(stateNames[i+1] || 'DEAD');
+    } else {
+      path.push('DEAD'); break;
+    }
+  }
+  return {accept:false, match:null, path};
+}
+
+// NFA: simulate with subset tracking
+function nfaCheck(word) {
+  const w = word.toLowerCase();
+  // States: q0,q1,q2,q3,q4a,q4b,q5b,acc_color,acc_colour
+  // Transitions as function
+  function step(states, ch) {
+    const nxt = new Set();
+    for (const s of states) {
+      if (s==='q0' && ch==='c') nxt.add('q1');
+      if (s==='q1' && ch==='o') nxt.add('q2');
+      if (s==='q2' && ch==='l') nxt.add('q3');
+      // NFA: q3 on 'o' → BOTH q4a and q4b
+      if (s==='q3' && ch==='o') { nxt.add('q4a'); nxt.add('q4b'); }
+      // American: q4a on 'r' → accept_color
+      if (s==='q4a' && ch==='r') nxt.add('acc_color');
+      // British: q4b on 'u' → q5b
+      if (s==='q4b' && ch==='u') nxt.add('q5b');
+      // q5b on 'r' → accept_colour
+      if (s==='q5b' && ch==='r') nxt.add('acc_colour');
+    }
+    return nxt;
+  }
+
+  let current = new Set(['q0']);
+  const steps = [new Set(['q0'])];
+  for (const ch of w) {
+    current = step(current, ch);
+    steps.push(new Set(current));
+  }
+  const accepts = new Set(['acc_color','acc_colour']);
+  const hit = [...current].filter(s=>accepts.has(s));
+  const match = hit.includes('acc_color') ? 'color' : hit.includes('acc_colour') ? 'colour' : null;
+  return {accept:hit.length>0, match, steps, chars:w.split('')};
+}
+
+// Levenshtein matrix
+function levenshtein(a, b) {
+  const m=a.length, n=b.length;
+  const dp=Array.from({length:m+1},(_,i)=>Array.from({length:n+1},(_,j)=>i===0?j:j===0?i:0));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  return dp;
+}
+
+// ==============================
+// RENDER
+// ==============================
+function check() {
+  const word = document.getElementById('wordIn').value.trim();
+  if (!word) return;
+
+  const dfaR = dfaCheck(word);
+  const nfaR = nfaCheck(word);
+
+  // DFA card
+  const dfaCard = document.getElementById('dfaCard');
+  dfaCard.className = 'res-card dfa-card has-result';
+  const dfaV = document.getElementById('dfaVerdict');
+  dfaV.className = 'verdict ' + (dfaR.accept?'accept':'reject');
+  dfaV.textContent = dfaR.accept ? `✓ ACCEPTED — "${dfaR.match}"` : `✗ REJECTED`;
+  document.getElementById('dfaDetail').textContent = dfaR.accept
+    ? `"${word}" matches the DFA's exact accept path for ${dfaR.match}.`
+    : `"${word}" hits a DEAD state. Not "color" or "colour". Edit distance from "color": ${levenshtein(word,'color')[word.length][5]}.`;
+  const dfaBadges = document.getElementById('dfaBadges');
+  dfaBadges.innerHTML = dfaR.path.map(s=>`<span class="method-badge ${s.startsWith('ACCEPT')?'mb-ok':'mb-dfa'}">${s}</span>`).join('→');
+
+  // NFA card
+  const nfaCard = document.getElementById('nfaCard');
+  nfaCard.className = 'res-card nfa-card has-result';
+  const nfaV = document.getElementById('nfaVerdict');
+  nfaV.className = 'verdict ' + (nfaR.accept?'accept':'reject');
+  nfaV.textContent = nfaR.accept ? `✓ ACCEPTED — "${nfaR.match}"` : `✗ REJECTED`;
+  document.getElementById('nfaDetail').textContent = nfaR.accept
+    ? `At least one parallel NFA path reached an accept state (${nfaR.match}).`
+    : `No parallel NFA path reached any accept state. Possible suggestion: ${levenshtein(word,'colour')[word.length][6] <= 2 ? '"colour"' : '"color"'}.`;
+  const nfaBadges = document.getElementById('nfaBadges');
+  const finalStates = [...nfaR.steps[nfaR.steps.length-1]];
+  nfaBadges.innerHTML = finalStates.map(s=>`<span class="method-badge ${s.startsWith('acc')?'mb-ok':'mb-nfa'}">{${s}}</span>`).join(' ');
+
+  // NFA path section
+  renderNfaPaths(word, nfaR);
+
+  // Edit distance
+  renderEditTable(word);
+}
+
+function renderNfaPaths(word, nfaR) {
+  document.getElementById('nfaPathSec').style.display='block';
+  const el = document.getElementById('nfaPathDisplay');
+  el.innerHTML='';
+  const chars = ['(init)', ...word.toLowerCase().split('')];
+  nfaR.steps.forEach((stateSet, i) => {
+    const row = document.createElement('div');
+    row.className='path-row';
+    row.style.animationDelay=`${i*50}ms`;
+    const states = [...stateSet];
+    const stateHTML = states.length===0
+      ? '<span class="path-dead">∅ — all paths dead</span>'
+      : states.map(s=>{
+          const cls = s.startsWith('acc') ? 'ps-ok' : '';
+          return `<span class="path-state ${cls}">${s}</span>`;
+        }).join(' <span class="path-arr">|</span> ');
+    row.innerHTML=`
+      <span style="font-family:Fira Code;font-size:0.72rem;color:var(--muted);min-width:70px;">${chars[i]==='(init)'?'init':'"'+chars[i]+'"'}</span>
+      <span class="path-arr">→</span>
+      <span style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${stateHTML}</span>
+      ${states.length>1?'<span class="eps-note">parallel paths active</span>':''}
+    `;
+    el.appendChild(row);
+  });
+}
+
+function renderEditTable(word) {
+  // Compare against "color" (shorter, representative)
+  const target = 'color';
+  const w = word.toLowerCase();
+  const dp = levenshtein(w, target);
+  const dist = dp[w.length][target.length];
+  document.getElementById('editDistLabel').textContent = `"${word}" vs. "color" — edit distance: ${dist}`;
+
+  const tbl = document.getElementById('editTable');
+  tbl.innerHTML='';
+
+  // Header row
+  const htr = document.createElement('tr');
+  ['',' ','ε',...target.split('')].forEach((ch,ci)=>{
+    const th=document.createElement('th');
+    th.textContent=ch;
+    if(ci>2) th.style.color='var(--nfa)';
+    htr.appendChild(th);
+  });
+  tbl.appendChild(htr);
+
+  // Rows
+  for(let i=0;i<=w.length;i++){
+    const tr=document.createElement('tr');
+    // Row label
+    const lbl=document.createElement('td');
+    lbl.className='state-col';
+    lbl.textContent=i===0?'ε':w[i-1];
+    tr.appendChild(lbl);
+    const idx=document.createElement('td');
+    idx.style.color='var(--muted)';
+    idx.style.fontFamily='Fira Code';
+    idx.style.fontSize='0.72rem';
+    idx.textContent=i;
+    tr.appendChild(idx);
+    for(let j=0;j<=target.length;j++){
+      const td=document.createElement('td');
+      const val=dp[i][j];
+      td.textContent=val;
+      td.style.textAlign='center';
+      // Highlight diagonal / path
+      if(i===w.length && j===target.length){
+        td.style.background='rgba(192,57,43,0.15)';
+        td.style.color='var(--dfa)';
+        td.style.fontWeight='700';
+      } else if(val===0){
+        td.style.color='var(--green)';
+      } else if(val<=1){
+        td.style.color='var(--nfa)';
+      }
+      tr.appendChild(td);
+    }
+    tbl.appendChild(tr);
+  }
+}
+
+function setW(w) { document.getElementById('wordIn').value=w; check(); }
+window.onload = () => check();
+</script>
+</body>
+</html>
